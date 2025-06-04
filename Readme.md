@@ -1,82 +1,62 @@
 MCP Server
-A Media Conversion Pipeline (MCP) server built with FastAPI for video editing using FFmpeg. It accepts a video URL and a text prompt (e.g., "trim 10 20; crop 100 100 0 0; filter sepia"), downloads the video, applies editing operations, and provides a download link.
+A Media Conversion Pipeline (MCP) server built with FastAPI for video editing using FFmpeg. It accepts a video URL and a natural language prompt (e.g., "Cut from 10 to 20 seconds and apply sepia filter"), processes the prompt using the Gemini API, applies editing operations, and provides a download link.
 Prerequisites
 
 Python 3.6+ (Python Downloads)
-FFmpeg installed and added to PATH (FFmpeg Installation)
-Git (optional, for cloning)
+FFmpeg installed at C:\Program Files\ffmpeg-7.1.1-full_build\ffmpeg-7.1.1-full_build\bin (Windows)
+Gemini API key (Google AI Studio)
+Virtual environment
 
 Installation
 
-Clone the Repository (if using Git):
-git clone <repository-url>
-cd mcp_server
+Navigate to Project Directory:
+cd glam-server
 
 
-Create and Activate a Virtual Environment:
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-.\venv\Scripts\activate   # Windows
+Create and Activate Virtual Environment:
+python -m venv .venv
+.venv\Scripts\activate
 
 
 Install Dependencies:
 pip install -r requirements.txt
 
 
-Install FFmpeg:
+Configure Gemini API Key:
 
-Windows:
-Download from gyan.dev (e.g., ffmpeg-release-full.7z).
-Extract and add ffmpeg\bin to your system PATH.
-Verify: ffmpeg -version
+Create a .env file in the project root:GEMINI_API_KEY=your-api-key
 
 
-macOS:
-Install via Homebrew: brew install ffmpeg
-Verify: ffmpeg -version
+Replace your-api-key with your Gemini API key.
 
 
-Linux (Ubuntu/Debian):
-Install: sudo apt update && sudo apt install ffmpeg
-Verify: ffmpeg -version
-
-
+Verify FFmpeg:
+"C:\Program Files\ffmpeg-7.1.1-full_build\ffmpeg-7.1.1-full_build\bin\ffmpeg.exe" -version
 
 
 
 Running the Server
-
-Start the Server:
-python src/main.py
-
-
-The server runs on http://localhost:8000. Access the API documentation at http://localhost:8000/docs.
-
+uvicorn src.main:app --reload
 
 Usage
-Send a POST request to /edit_video with a JSON body containing:
+Send a POST request to http://localhost:8000/edit_video with a video URL and natural language prompt.
+curl -X POST http://localhost:8000/edit_video -H "Content-Type: application/json" -d '{"url":"https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4","prompt":"Cut from 10 to 20 seconds and apply sepia filter"}'
 
-url: Direct URL to an MP4 video.
-prompt: Editing instructions (e.g., "trim 10 20; crop 100 100 0 0; filter sepia").
+Response: {"edited_video_url":"/download/<uuid>.mp4"}
+Download the video:
+curl http://localhost:8000/download/<uuid>.mp4 --output edited_video.mp4
 
-Example:
-curl -X POST http://localhost:8000/edit_video -H "Content-Type: application/json" -d '{"url":"http://example.com/sample.mp4","prompt":"trim 10 20; filter sepia"}'
-
-Response:
-{"edited_video_url":"/download/123e4567-e89b-12d3-a456-426614174000.mp4"}
-
-Download the video at http://localhost:8000/download/<filename>.
 Supported Operations
 
-trim start end: Cuts video from start to end seconds (e.g., "trim 10 20").
-crop w h x y: Crops to width w, height h, at position (x, y) (e.g., "crop 100 100 0 0").
-filter name: Applies a filter (e.g., "filter sepia" or "filter grayscale").
+trim start end: Cuts video from start to end seconds.
+crop w h x y: Crops to width w, height h, at (x, y).
+filter name: Applies sepia or grayscale.
 
 Notes
 
+Edited videos are stored in output_videos/.
 Only one trim operation is supported.
-Assumes direct MP4 URLs. For YouTube, integrate yt-dlp.
-For production, use a WSGI server like Gunicorn and consider cloud storage (e.g., AWS S3).
+Requires a Gemini API key stored in .env for natural language processing.
 
 License
 MIT License

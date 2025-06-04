@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from starlette.responses import FileResponse
 from pydantic import BaseModel
 import requests
 import tempfile
@@ -8,6 +8,7 @@ import uuid
 from src.config import OUTPUT_DIR
 from src.operation_parser import parse_prompt
 from src.ffmpeg_handler import generate_ffmpeg_command, run_ffmpeg_command
+from src.gemini_handler import parse_natural_language
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -20,16 +21,22 @@ class EditVideoRequest(BaseModel):
 @app.post('/edit_video')
 async def edit_video(data: EditVideoRequest):
     """
-    Process video editing request.
+    Process video editing request with natural language prompt.
     Args:
-        data: JSON with video URL and prompt
+        data: JSON with video URL and natural language prompt
     Returns:
         JSON with download URL for edited video
     """
     url = data.url
-    prompt = data.prompt
-    if not url or not prompt:
+    natural_prompt = data.prompt
+    if not url or not natural_prompt:
         raise HTTPException(status_code=400, detail="Missing url or prompt")
+
+    # Convert natural language prompt to MCP-compatible prompt
+    try:
+        mcp_prompt = parse_natural_language(natural_prompt)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Download video
     try:
@@ -43,17 +50,15 @@ async def edit_video(data: EditVideoRequest):
         raise HTTPException(status_code=400, detail=f"Failed to download video: {str(e)}")
 
     try:
-        # Parse prompt
-        ops = parse_prompt(prompt)
+        # Parse MCP prompt
+        ops = parse_prompt(mcp_prompt)
         # Generate output file name
         output_filename = f"{uuid.uuid4()}.mp4"
         output_file = os.path.join(OUTPUT_DIR, output_filename)
         # Generate and run FFmpeg command
         command = generate_ffmpeg_command(ops, input_file, output_file)
         run_ffmpeg_command(command)
-        # Return download URL
-        download_url = f"/download/{output_filename}"
-        return {"edited_video_url": download_url}
+        return {"edited_video_url": f"/download/{output_filename}"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
@@ -62,18 +67,19 @@ async def edit_video(data: EditVideoRequest):
         os.remove(input_file)
 
 @app.get('/download/{filename}')
-async def download(filename: str):
+async def download_file(filename: str):
     """
-    Serve edited video for download.
+    Download the edited video file.
     Args:
-        filename: Name of the video file
+        filename: Name of the file to download
     Returns:
-        FileResponse with the video file
+        File response
     """
     file_path = os.path.join(OUTPUT_DIR, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path)
+    return FileResponse(file_path, media_type='video/mp4', filename=filename)
+
 
 if __name__ == '__main__':
     import uvicorn
